@@ -1,0 +1,2030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Smoke Tracker</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      background-color: #09090b;
+      color: #f4f4f5;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+    
+    /* Native App UI Rules */
+    * {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    input, select, textarea {
+      user-select: text;
+    }
+    
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(63, 63, 70, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(82, 82, 91, 0.6);
+    }
+    
+    /* Animations */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+    .animate-shake {
+      animation: shake 0.2s ease-in-out 0s 2;
+    }
+    
+    @keyframes float-smoke {
+      0% {
+        transform: translate(0, 0) scale(0.6);
+        opacity: 0;
+      }
+      10% {
+        opacity: 0.4;
+      }
+      100% {
+        transform: translate(var(--smoke-x, 8px), -30px) scale(1.4);
+        opacity: 0;
+      }
+    }
+    .smoke-particle {
+      animation: float-smoke 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% {
+        filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.8)) drop-shadow(0 0 6px rgba(239, 68, 68, 0.4));
+      }
+      50% {
+        filter: drop-shadow(0 0 5px rgba(239, 68, 68, 1)) drop-shadow(0 0 12px rgba(249, 115, 22, 0.8));
+      }
+    }
+    .ember-glow {
+      animation: pulse-glow 1.5s ease-in-out infinite;
+    }
+  </style>
+
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 flex justify-center items-start min-h-screen">
+
+  <div id="root" class="w-full max-w-md min-h-screen flex flex-col justify-between relative bg-zinc-950 border-x border-zinc-900 shadow-2xl">
+    </div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Translation Files
+    const translations = {
+      en: {
+        title: "Smoke Tracker",
+        settings: "Settings",
+        language: "Language",
+        smokeType: "Smoke Type",
+        cigarette: "Cigarette",
+        cigar: "Cigar",
+        cigarillo: "Cigarillo",
+        cost: "Cost Settings",
+        pricePerPack: "Price per Pack/Piece (€)",
+        piecesPerPack: "Pieces per Pack",
+        dailyAverage: "Current Daily Average",
+        allowHalfSmokes: "Allow Half-Smokes",
+        halfSmokeHelp: "Enable for splitting a smoke session into two separate halves.",
+        todaysCounter: "Today's Counter",
+        streakCounter: "Streak Counter",
+        streakActive: "day streak",
+        streakBroken: "streak broken",
+        days: "days",
+        heatmapTitle: "Last 30 Days",
+        moneySpentSaved: "Finance (Month)",
+        spent: "Spent",
+        saved: "Saved",
+        overspent: "Overspent",
+        smokeTrend: "Smoke Trend",
+        trendBetter: "less than last week",
+        trendWorse: "more than last week",
+        trendNoChange: "no change",
+        recentHistory: "Recent History Log",
+        noEntries: "No smokes tracked today yet.",
+        delete: "Delete",
+        undo: "Undo",
+        save: "Save",
+        close: "Close",
+        halfSmokeFront: "Front Half",
+        halfSmokeBack: "Back Half",
+        piece: "Piece",
+        pieces: "Pieces",
+        resetToday: "Reset Today",
+        confirmReset: "Are you sure you want to reset today's tracker? This will delete all smokes logged today.",
+        trackedAt: "Tracked at",
+        perfectDay: "Perfect Day! 0 smokes",
+        underLimit: "Well under average (<50%)",
+        nearLimit: "Close to average (50%-100%)",
+        overLimit: "Exceeded daily average",
+        untracked: "No data",
+        quickTips: "Quick Guide",
+        tapToSmokeFront: "Tap the cigarette once to smoke the first half (0.5)",
+        tapToSmokeBack: "Tap the cigarette again to smoke the second half (0.5)",
+        tapToSmokeWhole: "Tap the cigarette to smoke 1.0",
+        startedNewCigarette: "Started a new smoke",
+        smokedOtherHalf: "Smoked the other half",
+        smokedWhole: "Smoked 1.0",
+        settingsSaved: "Settings saved!",
+        lastSmokeWarning: "Front half must be smoked first!",
+        backupRestore: "Backup & Restore",
+        exportData: "Export Logs",
+        importData: "Import Logs",
+        importConfirm: "Are you sure you want to import this data? It will replace your current logs.",
+        importSuccess: "Import successful! {count} logs loaded.",
+        importError: "Error: Invalid backup file format.",
+        dataExported: "Backup downloaded!",
+        setupProfile: "Important: Open Settings (gear icon) to personalize your profile, daily average limit, cost settings, and currency!"
+      },
+      de: {
+        title: "Rauch-Tracker",
+        settings: "Einstellungen",
+        language: "Sprache",
+        smokeType: "Rauch-Typ",
+        cigarette: "Zigarette",
+        cigar: "Zigarre",
+        cigarillo: "Zigarillo",
+        cost: "Kosten-Einstellungen",
+        pricePerPack: "Preis pro Packung/Stück (€)",
+        piecesPerPack: "Stück pro Packung",
+        dailyAverage: "Täglicher Durchschnitt",
+        allowHalfSmokes: "Halbe Ränge erlauben",
+        halfSmokeHelp: "Aktivieren, um eine Rauchung in zwei separate Hälften zu teilen.",
+        todaysCounter: "Heutiger Zähler",
+        streakCounter: "Erfolgsserie",
+        streakActive: "Tage in Folge",
+        streakBroken: "Strähne gerissen",
+        days: "Tage",
+        heatmapTitle: "Letzte 30 Tage",
+        moneySpentSaved: "Finanzen (Monat)",
+        spent: "Ausgegeben",
+        saved: "Gespart",
+        overspent: "Mehr ausgegeben",
+        smokeTrend: "Rauch-Trend",
+        trendBetter: "weniger als letzte Woche",
+        trendWorse: "mehr als letzte Woche",
+        trendNoChange: "keine Änderung",
+        recentHistory: "Letzte Aktivitäten",
+        noEntries: "Heute noch nichts erfasst.",
+        delete: "Löschen",
+        undo: "Rückgängig",
+        save: "Speichern",
+        close: "Schließen",
+        halfSmokeFront: "Vordere Hälfte",
+        halfSmokeBack: "Hintere Hälfte",
+        piece: "Stück",
+        pieces: "Stück",
+        resetToday: "Heute zurücksetzen",
+        confirmReset: "Bist du sicher, dass du den heutigen Tracker zurücksetzen willst? Dadurch werden alle heute erfassten Rauchungen gelöscht.",
+        trackedAt: "Erfasst um",
+        perfectDay: "Perfekter Tag! 0 geraucht",
+        underLimit: "Weit unter Durchschnitt (<50%)",
+        nearLimit: "Nah am Durchschnitt (50%-100%)",
+        overLimit: "Durchschnitt überschritten",
+        untracked: "Keine Daten",
+        quickTips: "Kurzanleitung",
+        tapToSmokeFront: "Tippe auf die Zigarette, um die erste Hälfte (0,5) zu rauchen",
+        tapToSmokeBack: "Tippe erneut auf die Zigarette, um die zweite Hälfte (0,5) zu rauchen",
+        tapToSmokeWhole: "Tippe auf die Zigarette, um 1,0 zu rauchen",
+        startedNewCigarette: "Neue Rauchung begonnen",
+        smokedOtherHalf: "Die andere Hälfte geraucht",
+        smokedWhole: "1,0 geraucht",
+        settingsSaved: "Einstellungen gespeichert!",
+        lastSmokeWarning: "Vordere Hälfte muss zuerst geraucht werden!",
+        backupRestore: "Backup & Wiederherstellung",
+        exportData: "Daten exportieren",
+        importData: "Daten importieren",
+        importConfirm: "Bist du sicher, dass du diese Daten importieren möchtest? Dies überschreibt deine aktuellen Aufzeichnungen.",
+        importSuccess: "Erfolgreich importiert! {count} Einträge geladen.",
+        importError: "Fehler: Ungültiges Backup-Format.",
+        dataExported: "Backup heruntergeladen!",
+        setupProfile: "Wichtig: Öffne die Einstellungen (Zahnrad oben rechts), um dein Profil, Tageslimit, Währungskosten und Vorlieben anzupassen!"
+      }
+    };
+
+    // Lucide Icons Replica
+    const Icon = ({ name, className = "w-5 h-5", ...props }) => {
+      const icons = {
+        settings: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        ),
+        fire: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+          </svg>
+        ),
+        trash: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>
+          </svg>
+        ),
+        plus: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <path d="M5 12h14"/><path d="M12 5v14"/>
+          </svg>
+        ),
+        star: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+          </svg>
+        ),
+        trendUp: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+          </svg>
+        ),
+        trendDown: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>
+          </svg>
+        ),
+        trendFlat: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/>
+          </svg>
+        ),
+        x: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        ),
+        dollar: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+        ),
+        calendar: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>
+          </svg>
+        ),
+        refresh: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>
+          </svg>
+        ),
+        info: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/>
+          </svg>
+        ),
+        upload: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>
+          </svg>
+        ),
+        download: (
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+          </svg>
+        )
+      };
+      return icons[name] || null;
+    };
+
+    // Timezone-safe local date generator (YYYY-MM-DD)
+    const getLocalDateString = (timestampOrDate) => {
+      const date = new Date(timestampOrDate);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Calculate Streak Function
+    const calculateStreak = (logs, dailyAverage) => {
+      if (logs.length === 0) return 0;
+      
+      const oldestLogTimestamp = Math.min(...logs.map(l => l.timestamp));
+      const oldestLogDateStr = getLocalDateString(oldestLogTimestamp);
+      
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      
+      let streak = 0;
+      let checkDate = new Date(today);
+      const limitDate = new Date(oldestLogTimestamp);
+      limitDate.setHours(0,0,0,0);
+      
+      while (checkDate >= limitDate) {
+        const dateStr = getLocalDateString(checkDate);
+        
+        // Sum logs for this date
+        const dayTotal = logs.reduce((sum, log) => {
+          if (getLocalDateString(log.timestamp) === dateStr) {
+            return sum + log.amount;
+          }
+          return sum;
+        }, 0);
+        
+        if (dayTotal < dailyAverage) {
+          streak++;
+        } else {
+          // If we hit a day above or equal to average, the streak breaks.
+          // Exception: If checkDate is TODAY, and today's total is still under average,
+          // the active streak can continue from yesterday. If today's total exceeds, it breaks instantly.
+          if (dateStr === getLocalDateString(today)) {
+            // Today's total is already >= dailyAverage, so streak breaks.
+            // If it was less, the loop continues to check yesterday.
+            break;
+          } else {
+            break;
+          }
+        }
+        
+        // Decrement by 1 day
+        checkDate.setDate(checkDate.getDate() - 1);
+      }
+      
+      return streak;
+    };
+
+
+
+    // Interactive Cigarette SVG Tracker Component with Custom Burn Animation
+    const CigaretteTracker = ({ settings, todayCount, onSmoke, t }) => {
+      const isHalfSmokes = settings.allowHalfSmokes;
+      
+      // Determine initial burn progress on load or when logs change
+      const getInitialProgress = () => {
+        const activeProgress = todayCount % 1.0;
+        return activeProgress === 0.5 ? 0.5 : 0.0;
+      };
+
+      const [burnProgress, setBurnProgress] = useState(getInitialProgress);
+      const [isAnimating, setIsAnimating] = useState(false);
+      const [noTransition, setNoTransition] = useState(false);
+      const [isFadingIn, setIsFadingIn] = useState(false);
+      const [isPopping, setIsPopping] = useState(false);
+
+      // Sync progress with today's count if not currently animating or fading
+      useEffect(() => {
+        if (!isAnimating && !isFadingIn) {
+          setBurnProgress(getInitialProgress());
+        }
+      }, [todayCount, isAnimating, isFadingIn]);
+
+      const triggerPop = () => {
+        setIsPopping(true);
+        setTimeout(() => setIsPopping(false), 200);
+      };
+
+      // Unified handler for clicking the cigarette (any click smokes next half or whole)
+      const handleCigaretteClick = (e) => {
+        e.stopPropagation();
+        if (isAnimating || isFadingIn) return;
+
+        if (!isHalfSmokes) {
+          // Whole cigarette mode
+          triggerPop();
+          setIsAnimating(true);
+          setBurnProgress(1.0);
+          onSmoke(1.0, t('smokedWhole'));
+
+          // Burns to filter over 3 seconds, then resets
+          setTimeout(() => {
+            setIsFadingIn(true); // Fade out
+            
+            setTimeout(() => {
+              setNoTransition(true);
+              setBurnProgress(0.0);
+              
+              setTimeout(() => {
+                setNoTransition(false);
+                setIsFadingIn(false);
+                setIsAnimating(false);
+              }, 50);
+            }, 400); // fade out takes 400ms
+          }, 3400);
+        } else {
+          // Half smokes mode
+          if (burnProgress === 0.0) {
+            // First click: smoke front half (0.5)
+            triggerPop();
+            setIsAnimating(true);
+            setBurnProgress(0.5);
+            onSmoke(0.5, t('startedNewCigarette'));
+            
+            // Animate for 2 seconds
+            setTimeout(() => {
+              setIsAnimating(false);
+            }, 2000);
+          } else if (burnProgress === 0.5) {
+            // Second click: smoke back half (0.5)
+            triggerPop();
+            setIsAnimating(true);
+            setBurnProgress(1.0);
+            onSmoke(0.5, t('smokedOtherHalf'));
+
+            // Burns to filter, then resets after 2.4 seconds (2s animation + 0.4s rest)
+            setTimeout(() => {
+              setIsFadingIn(true); // Fade out cigarette
+              
+              setTimeout(() => {
+                setNoTransition(true);
+                setBurnProgress(0.0);
+                
+                setTimeout(() => {
+                  setNoTransition(false);
+                  setIsFadingIn(false);
+                  setIsAnimating(false);
+                }, 50);
+              }, 400); // fade out takes 400ms
+            }, 2400);
+          }
+        }
+      };
+
+      // SVG coordinate calculations:
+      // Filter spans from x = 10 to 65 (width = 55)
+      // Paper spans from x = 65 to 260 (width = 195)
+      const paperWidth = 195 * (1 - burnProgress);
+      const ashWidth = 195 * burnProgress;
+      const emberX = 65 + paperWidth;
+
+      const transitionDuration = isHalfSmokes ? '2s' : '3s';
+      const transitionStyle = noTransition 
+        ? 'none' 
+        : `width ${transitionDuration} linear, x ${transitionDuration} linear, cx ${transitionDuration} linear, opacity 0.2s ease-out ${isHalfSmokes ? '1.8s' : '2.8s'}`;
+
+      const showEmber = !isFadingIn;
+
+      return (
+        <div className="flex flex-col items-center justify-center py-6 select-none w-full">
+          <div 
+            className={`relative transition-all duration-500 ${isPopping ? 'scale-105' : 'scale-100'} ${
+              isFadingIn ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+            }`}
+          >
+            {/* Ambient Ember Particles (Smoke) */}
+            {showEmber && (
+              <div 
+                className="absolute pointer-events-none"
+                style={{
+                  top: '-15px',
+                  left: `${(emberX / 280) * 100}%`,
+                  transition: noTransition ? 'none' : `left ${transitionDuration} linear, opacity 0.2s ease-out ${isHalfSmokes ? '1.8s' : '2.8s'}`,
+                  opacity: burnProgress >= 1.0 ? 0 : 1
+                }}
+              >
+                <div className="smoke-particle w-1.5 h-1.5 rounded-full bg-zinc-400/40" style={{ '--smoke-x': '10px', animationDelay: '0s' }}></div>
+                <div className="smoke-particle w-2 h-2 rounded-full bg-zinc-500/30" style={{ '--smoke-x': '-8px', animationDelay: '0.7s' }}></div>
+                <div className="smoke-particle w-1 h-1 rounded-full bg-zinc-300/40" style={{ '--smoke-x': '4px', animationDelay: '1.4s' }}></div>
+              </div>
+            )}
+            
+            <svg viewBox="0 0 280 44" className="w-72 h-14 overflow-visible">
+              <defs>
+                {/* 3D cylindrical lighting gradients */}
+                <linearGradient id="cig-filter" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#fb923c" />
+                  <stop offset="35%" stopColor="#f97316" />
+                  <stop offset="100%" stopColor="#c2410c" />
+                </linearGradient>
+                <linearGradient id="cig-body" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#ffffff" />
+                  <stop offset="45%" stopColor="#fafafa" />
+                  <stop offset="100%" stopColor="#d4d4d8" />
+                </linearGradient>
+                <linearGradient id="cig-ash-fade" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#4b5563" stopOpacity="0.9" />
+                  <stop offset="30%" stopColor="#3f3f46" stopOpacity="0.6" />
+                  <stop offset="75%" stopColor="#27272a" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="#09090b" stopOpacity="0" />
+                </linearGradient>
+                <radialGradient id="ember-radial">
+                  <stop offset="0%" stopColor="#fef08a" />
+                  <stop offset="30%" stopColor="#f97316" />
+                  <stop offset="70%" stopColor="#ef4444" />
+                  <stop offset="100%" stopColor="transparent" />
+                </radialGradient>
+              </defs>
+
+              {/* === DRAW CIGARETTE === */}
+              <g className="transition-all duration-300">
+                {/* Yellow Filter */}
+                <rect x="10" y="10" width="55" height="24" rx="2" fill="url(#cig-filter)" />
+                <line x1="65" y1="10" x2="65" y2="34" stroke="#7c2d12" strokeWidth="0.8" opacity="0.4" />
+                
+                {/* Unburned Paper Body */}
+                <rect 
+                  x="65" 
+                  y="10" 
+                  width={paperWidth} 
+                  height="24" 
+                  fill="url(#cig-body)" 
+                  stroke="#e4e4e7" 
+                  strokeWidth="0.4" 
+                  style={{ transition: transitionStyle }}
+                />
+
+                {/* Burnt Ash Body (Fades out to the right) */}
+                {ashWidth > 0 && (
+                  <rect 
+                    x={65 + paperWidth} 
+                    y="12" 
+                    width={ashWidth} 
+                    height="20" 
+                    fill="url(#cig-ash-fade)" 
+                    style={{ transition: transitionStyle }}
+                  />
+                )}
+              </g>
+
+              {/* Glowing Ember */}
+              {showEmber && (
+                <ellipse 
+                  cx={emberX} 
+                  cy="22" 
+                  rx="4" 
+                  ry="12" 
+                  fill="url(#ember-radial)" 
+                  className="ember-glow" 
+                  style={{ 
+                    transition: transitionStyle,
+                    opacity: burnProgress >= 1.0 ? 0 : 1
+                  }}
+                />
+              )}
+
+              {/* Entire Click Zone Overlay (Click anywhere) */}
+              <rect 
+                x="10" 
+                y="0" 
+                width="250" 
+                height="44" 
+                fill="transparent" 
+                className="cursor-pointer"
+                onClick={handleCigaretteClick}
+              />
+            </svg>
+          </div>
+        </div>
+      );
+    };
+
+    // Main App Component
+    const App = () => {
+      // Load Settings from LocalStorage
+      const [settings, setSettings] = useState(() => {
+        const saved = localStorage.getItem('smoke_tracker_settings');
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            // Fallback for new settings properties if needed
+            return {
+              language: 'en',
+              smokeType: 'cigarette',
+              pricePerPack: 8.50,
+              piecesPerPack: 20,
+              dailyAverage: 10,
+              allowHalfSmokes: false,
+              ...parsed
+            };
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        return {
+          language: 'en',
+          smokeType: 'cigarette',
+          pricePerPack: 8.50,
+          piecesPerPack: 20,
+          dailyAverage: 10,
+          allowHalfSmokes: false
+        };
+      });
+
+      // Load logs from LocalStorage
+      const [logs, setLogs] = useState(() => {
+        const saved = localStorage.getItem('smoke_tracker_logs');
+        if (saved) {
+          try {
+            return JSON.parse(saved);
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        return [];
+      });
+
+      const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+      const [selectedHeatmapDay, setSelectedHeatmapDay] = useState(null);
+      const [actionToast, setActionToast] = useState(null);
+      // Heatmap view state (rolling30 | yearly | YYYY-MM)
+      const [heatmapView, setHeatmapView] = useState('rolling30');
+      const [showStreakInfo, setShowStreakInfo] = useState(false);
+
+      // Temporary edit states inside Settings Modal
+      const [editSettings, setEditSettings] = useState({ ...settings });
+
+      // File input ref for data importing
+      const fileInputRef = useRef(null);
+
+      const handleExportData = () => {
+        try {
+          // Export both settings and logs
+          const backupPayload = { settings, logs };
+          const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupPayload, null, 2));
+          const downloadAnchor = document.createElement('a');
+          downloadAnchor.setAttribute("href", dataStr);
+          const dateStr = getLocalDateString(new Date());
+          downloadAnchor.setAttribute("download", `smoke_tracker_backup_${dateStr}.json`);
+          document.body.appendChild(downloadAnchor);
+          downloadAnchor.click();
+          downloadAnchor.remove();
+          showToast(t('dataExported'));
+        } catch (e) {
+          console.error(e);
+          showToast("Export failed");
+        }
+      };
+
+      const handleImportData = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (!window.confirm(t('importConfirm'))) {
+          e.target.value = '';
+          return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const parsed = JSON.parse(event.target.result);
+            let importedLogs = [];
+            let importedSettings = null;
+            
+            // Check structure for backward compatibility
+            if (Array.isArray(parsed)) {
+              // Legacy log-only array format
+              importedLogs = parsed;
+            } else if (parsed && typeof parsed === 'object') {
+              // New format containing settings and logs keys
+              importedLogs = parsed.logs || [];
+              importedSettings = parsed.settings || null;
+            } else {
+              throw new Error("Invalid format");
+            }
+            
+            const validatedLogs = importedLogs.filter(item => {
+              return item && typeof item === 'object' && typeof item.timestamp === 'number' && typeof item.amount === 'number';
+            });
+            
+            if (validatedLogs.length === 0 && importedLogs.length > 0) {
+              throw new Error("No valid logs found");
+            }
+            
+            if (importedSettings && typeof importedSettings === 'object') {
+              // Apply imported settings (merge with defaults to ensure robustness)
+              setSettings(prev => ({
+                ...prev,
+                ...importedSettings
+              }));
+            }
+            
+            setLogs(validatedLogs);
+            showToast(t('importSuccess').replace('{count}', validatedLogs.length));
+          } catch (err) {
+            console.error(err);
+            alert(t('importError'));
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+      };
+
+      // Save to localStorage whenever states change
+      useEffect(() => {
+        localStorage.setItem('smoke_tracker_settings', JSON.stringify(settings));
+      }, [settings]);
+
+      useEffect(() => {
+        localStorage.setItem('smoke_tracker_logs', JSON.stringify(logs));
+      }, [logs]);
+
+      // Initialize edit settings when modal opens
+      useEffect(() => {
+        if (isSettingsOpen) {
+          setEditSettings({ ...settings });
+        }
+      }, [isSettingsOpen, settings]);
+
+      // Translate helper
+      const t = (key) => translations[settings.language][key] || key;
+
+      // Toast feedback helper
+      const showToast = (message) => {
+        setActionToast(message);
+        const timer = setTimeout(() => {
+          setActionToast(null);
+        }, 1800);
+        return () => clearTimeout(timer);
+      };
+
+      // Add a Smoke Log
+      const handleAddSmoke = (amount, toastMsg) => {
+        const newLog = {
+          id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+          timestamp: Date.now(),
+          amount: amount
+        };
+        setLogs(prev => [newLog, ...prev]);
+        showToast(toastMsg || `+${amount}`);
+      };
+
+      // Delete a Specific Log Entry (Undo / History delete)
+      const handleDeleteLog = (id) => {
+        setLogs(prev => prev.filter(log => log.id !== id));
+        showToast(t('undo'));
+      };
+
+      // Reset today's logs completely
+      const handleResetToday = () => {
+        if (window.confirm(t('confirmReset'))) {
+          const todayStr = getLocalDateString(new Date());
+          setLogs(prev => prev.filter(log => getLocalDateString(log.timestamp) !== todayStr));
+          showToast(t('resetToday'));
+        }
+      };
+
+      // Calculate today's count
+      const todayStr = getLocalDateString(new Date());
+      const todayLogs = logs.filter(log => getLocalDateString(log.timestamp) === todayStr);
+      const todayCount = todayLogs.reduce((sum, log) => sum + log.amount, 0);
+
+      // Streak
+      const streak = calculateStreak(logs, settings.dailyAverage);
+
+      // View-dependent Finance and Trend calculators
+      const calculateFinanceForView = (view) => {
+        const pricePerPiece = settings.pricePerPack / settings.piecesPerPack || 0;
+        let filteredLogs = [];
+        let daysTracked = 30;
+
+        const oldestLogTimestampVal = logs.length > 0 ? Math.min(...logs.map(l => l.timestamp)) : null;
+        const oldestLogDateVal = oldestLogTimestampVal ? new Date(oldestLogTimestampVal) : null;
+        const today = new Date();
+
+        if (view === 'rolling30') {
+          const cutOff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          filteredLogs = logs.filter(log => log.timestamp >= cutOff);
+          
+          if (oldestLogDateVal) {
+            const daysSinceStart = Math.floor((Date.now() - oldestLogDateVal.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            daysTracked = Math.min(30, daysSinceStart);
+          } else {
+            daysTracked = 1;
+          }
+        } else if (view === 'yearly') {
+          const currentYear = today.getFullYear();
+          filteredLogs = logs.filter(log => new Date(log.timestamp).getFullYear() === currentYear);
+          
+          if (oldestLogDateVal) {
+            if (oldestLogDateVal.getFullYear() < currentYear) {
+              const startOfYear = new Date(currentYear, 0, 1);
+              const diff = today.getTime() - startOfYear.getTime();
+              daysTracked = Math.max(1, Math.floor(diff / (1000 * 60 * 60 * 24)) + 1);
+            } else {
+              const startPoint = new Date(oldestLogDateVal);
+              startPoint.setHours(0,0,0,0);
+              const diff = today.getTime() - startPoint.getTime();
+              daysTracked = Math.max(1, Math.floor(diff / (1000 * 60 * 60 * 24)) + 1);
+            }
+          } else {
+            daysTracked = 1;
+          }
+        } else {
+          // specific month YYYY-MM
+          const [year, monthStr] = view.split('-').map(Number);
+          const monthIdx = monthStr - 1;
+          filteredLogs = logs.filter(log => {
+            const d = new Date(log.timestamp);
+            return d.getMonth() === monthIdx && d.getFullYear() === year;
+          });
+
+          const maxDays = new Date(year, monthIdx + 1, 0).getDate();
+          
+          // Check if month is in the future
+          const isFuture = (year > today.getFullYear()) || (year === today.getFullYear() && monthIdx > today.getMonth());
+          const isPast = (year < today.getFullYear()) || (year === today.getFullYear() && monthIdx < today.getMonth());
+          const hasActualLogs = filteredLogs.length > 0;
+
+          if (isFuture) {
+            daysTracked = 0;
+          } else if (isPast && !hasActualLogs) {
+            daysTracked = maxDays;
+          } else if (today.getFullYear() === year && today.getMonth() === monthIdx) {
+            let startDay = 1;
+            if (oldestLogDateVal && oldestLogDateVal.getFullYear() === year && oldestLogDateVal.getMonth() === monthIdx) {
+              startDay = oldestLogDateVal.getDate();
+            }
+            daysTracked = Math.max(1, today.getDate() - startDay + 1);
+          } else if (oldestLogDateVal && oldestLogDateVal.getFullYear() === year && oldestLogDateVal.getMonth() === monthIdx) {
+            daysTracked = Math.max(1, maxDays - oldestLogDateVal.getDate() + 1);
+          } else if (oldestLogDateVal && oldestLogDateVal.getTime() > new Date(year, monthIdx + 1, 0).getTime()) {
+            daysTracked = 0; // before tracking started
+          } else {
+            daysTracked = maxDays;
+          }
+        }
+
+        const hasData = daysTracked > 0;
+        
+        let spent = 0;
+        let baseline = 0;
+        let saved = 0;
+        
+        // Handle simulation for past untracked months
+        const [y, mStr] = view.includes('-') ? view.split('-').map(Number) : [null, null];
+        const isPastMonth = y !== null && ((y < today.getFullYear()) || (y === today.getFullYear() && (mStr - 1) < today.getMonth()));
+        const mLogs = y !== null ? logs.filter(log => {
+          const d = new Date(log.timestamp);
+          return d.getMonth() === (mStr - 1) && d.getFullYear() === y;
+        }) : [];
+        const isSimulated = isPastMonth && mLogs.length === 0;
+
+        if (isSimulated) {
+          const maxDays = new Date(y, mStr, 0).getDate();
+          spent = (maxDays * settings.dailyAverage) * pricePerPiece;
+          baseline = spent;
+          saved = 0;
+        } else {
+          spent = hasData ? filteredLogs.reduce((sum, log) => sum + log.amount, 0) * pricePerPiece : 0;
+          baseline = hasData ? (daysTracked * settings.dailyAverage) * pricePerPiece : 0;
+          saved = hasData ? (baseline - spent) : 0;
+        }
+
+        return { spent, saved, hasData };
+      };
+
+      const calculateTrendForView = (view) => {
+        const today = new Date();
+        const oldestLogTimestampVal = logs.length > 0 ? Math.min(...logs.map(l => l.timestamp)) : null;
+        const oldestLogDateVal = oldestLogTimestampVal ? new Date(oldestLogTimestampVal) : null;
+
+        const getRolling30DailyAvg = () => {
+          const cutOff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          const rollingLogs = logs.filter(log => log.timestamp >= cutOff);
+          const total = rollingLogs.reduce((sum, log) => sum + log.amount, 0);
+          
+          let days = 30;
+          if (oldestLogDateVal) {
+            const diff = Math.floor((Date.now() - oldestLogDateVal.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            days = Math.min(30, diff);
+          }
+          return days > 0 ? total / days : 0;
+        };
+
+        const rolling30Avg = getRolling30DailyAvg();
+
+        if (view === 'rolling30') {
+          const oneWeek = 7 * 24 * 60 * 60 * 1000;
+          const currentWeekLogs = logs.filter(log => log.timestamp >= Date.now() - oneWeek);
+          const prevWeekLogs = logs.filter(log => log.timestamp >= Date.now() - 2 * oneWeek && log.timestamp < Date.now() - oneWeek);
+          
+          const currentWeekTotal = currentWeekLogs.reduce((sum, log) => sum + log.amount, 0);
+          const prevWeekTotal = prevWeekLogs.reduce((sum, log) => sum + log.amount, 0);
+          
+          const labelText = settings.language === 'de' ? 'als letzte Woche' : 'than last week';
+          
+          if (prevWeekTotal === 0) return { percent: 0, hasData: true, labelText };
+          
+          const percent = ((currentWeekTotal - prevWeekTotal) / prevWeekTotal) * 100;
+          return { percent, hasData: true, labelText };
+        } else if (view === 'yearly') {
+          const currentYear = today.getFullYear();
+          const yearLogs = logs.filter(log => new Date(log.timestamp).getFullYear() === currentYear);
+          const yearTotal = yearLogs.reduce((sum, log) => sum + log.amount, 0);
+          
+          let daysTracked = 365;
+          if (oldestLogDateVal) {
+            if (oldestLogDateVal.getFullYear() < currentYear) {
+              const startOfYear = new Date(currentYear, 0, 1);
+              daysTracked = Math.max(1, Math.floor((today.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+            } else {
+              const startPoint = new Date(oldestLogDateVal);
+              startPoint.setHours(0,0,0,0);
+              daysTracked = Math.max(1, Math.floor((today.getTime() - startPoint.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+            }
+          }
+          const yearlyAvg = daysTracked > 0 ? yearTotal / daysTracked : 0;
+          const labelText = settings.language === 'de' 
+            ? 'dieses Jahr im Schnitt als in den letzten 30 Tagen' 
+            : 'this year on average than the last 30 days';
+          
+          if (rolling30Avg === 0) return { percent: 0, hasData: true, labelText };
+          
+          const percent = ((yearlyAvg - rolling30Avg) / rolling30Avg) * 100;
+          return { percent, hasData: true, labelText };
+        } else {
+          const [year, monthStr] = view.split('-').map(Number);
+          const monthIdx = monthStr - 1;
+          
+          const monthName = new Date(year, monthIdx, 1).toLocaleDateString(settings.language === 'de' ? 'de-DE' : 'en-US', { month: 'long' });
+          
+          const maxDays = new Date(year, monthIdx + 1, 0).getDate();
+          
+          // Check if month is in the future
+          const isFuture = (year > today.getFullYear()) || (year === today.getFullYear() && monthIdx > today.getMonth());
+          const isPast = (year < today.getFullYear()) || (year === today.getFullYear() && monthIdx < today.getMonth());
+          
+          const monthLogs = logs.filter(log => {
+            const d = new Date(log.timestamp);
+            return d.getMonth() === monthIdx && d.getFullYear() === year;
+          });
+          const hasActualLogs = monthLogs.length > 0;
+
+          let daysTracked = maxDays;
+          if (isFuture) {
+            daysTracked = 0;
+          } else if (isPast && !hasActualLogs) {
+            daysTracked = maxDays;
+          } else if (today.getFullYear() === year && today.getMonth() === monthIdx) {
+            let startDay = 1;
+            if (oldestLogDateVal && oldestLogDateVal.getFullYear() === year && oldestLogDateVal.getMonth() === monthIdx) {
+              startDay = oldestLogDateVal.getDate();
+            }
+            daysTracked = Math.max(1, today.getDate() - startDay + 1);
+          } else if (oldestLogDateVal && oldestLogDateVal.getFullYear() === year && oldestLogDateVal.getMonth() === monthIdx) {
+            daysTracked = Math.max(1, maxDays - oldestLogDateVal.getDate() + 1);
+          } else if (oldestLogDateVal && oldestLogDateVal.getTime() > new Date(year, monthIdx + 1, 0).getTime()) {
+            daysTracked = 0;
+          }
+
+          if (daysTracked === 0) {
+            return {
+              percent: 0,
+              hasData: false,
+              labelText: settings.language === 'de' ? `im ${monthName} (keine Daten)` : `in ${monthName} (no data)`
+            };
+          }
+
+          let monthAvg = 0;
+          let labelText = '';
+
+          if (isPast && !hasActualLogs) {
+            monthAvg = settings.dailyAverage;
+            labelText = settings.language === 'de'
+              ? `im ${monthName} (kalkulierter Richtwert) als in den letzten 30 Tagen`
+              : `in ${monthName} (estimated benchmark) than the last 30 days`;
+          } else {
+            const monthTotal = monthLogs.reduce((sum, log) => sum + log.amount, 0);
+            monthAvg = monthTotal / daysTracked;
+            labelText = settings.language === 'de' 
+              ? `im ${monthName} als in den letzten 30 Tagen` 
+              : `in ${monthName} than the last 30 days`;
+          }
+          
+          if (rolling30Avg === 0) return { percent: 0, hasData: true, labelText };
+          
+          const percent = ((monthAvg - rolling30Avg) / rolling30Avg) * 100;
+          return { percent, hasData: true, labelText };
+        }
+      };
+
+      const getFinanceHeader = () => {
+        if (heatmapView === 'rolling30') return t('moneySpentSaved');
+        if (heatmapView === 'yearly') return settings.language === 'de' ? 'Finanzen (Jahr)' : 'Finance (Year)';
+        const [year, monthStr] = heatmapView.split('-').map(Number);
+        const monthName = new Date(year, monthStr - 1, 1).toLocaleDateString(settings.language === 'de' ? 'de-DE' : 'en-US', { month: 'long' });
+        return settings.language === 'de' ? `Finanzen (${monthName})` : `Finance (${monthName})`;
+      };
+
+      const getTrendHeader = () => {
+        if (heatmapView === 'rolling30') return t('smokeTrend');
+        if (heatmapView === 'yearly') return settings.language === 'de' ? 'Jahrestrend' : 'Yearly Trend';
+        const [year, monthStr] = heatmapView.split('-').map(Number);
+        const monthName = new Date(year, monthStr - 1, 1).toLocaleDateString(settings.language === 'de' ? 'de-DE' : 'en-US', { month: 'long' });
+        return settings.language === 'de' ? `Trend (${monthName})` : `Trend (${monthName})`;
+      };
+
+      const currentFinance = calculateFinanceForView(heatmapView);
+      const currentTrend = calculateTrendForView(heatmapView);
+
+      // Helper to generate the grid of days depending on selection
+      const getCalendarMonthGrid = (year, monthIdx) => {
+        const days = [];
+        const firstDay = new Date(year, monthIdx, 1);
+        
+        let dayOfWeek = firstDay.getDay(); // 0 = Sunday, 1 = Monday...
+        let offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // offset so Monday is index 0
+        
+        for (let i = 0; i < offset; i++) {
+          days.push(null);
+        }
+        
+        const lastDay = new Date(year, monthIdx + 1, 0);
+        const totalDays = lastDay.getDate();
+        for (let i = 1; i <= totalDays; i++) {
+          days.push(new Date(year, monthIdx, i));
+        }
+        
+        return days;
+      };
+
+      const getHeatmapDays = () => {
+        if (heatmapView === 'rolling30') {
+          const list = [];
+          const today = new Date();
+          for (let i = 29; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            list.push(d);
+          }
+          
+          // Align rolling 30 grid with weekdays dynamically for visual consistency
+          const firstDay = list[0];
+          const dayOfWeek = firstDay.getDay();
+          const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+          const paddedList = [];
+          for (let i = 0; i < offset; i++) {
+            paddedList.push(null);
+          }
+          return [...paddedList, ...list];
+        } else {
+          // calendar month YYYY-MM
+          const [year, monthStr] = heatmapView.split('-').map(Number);
+          const monthIdx = monthStr - 1;
+          return getCalendarMonthGrid(year, monthIdx);
+        }
+      };
+
+      const heatmapDays = heatmapView !== 'yearly' ? getHeatmapDays() : [];
+      const todayDateObj = new Date();
+
+      // Oldest log date to identify starting boundary
+      const oldestLogTimestamp = logs.length > 0 ? Math.min(...logs.map(l => l.timestamp)) : null;
+      const startOfTrackingDateStr = oldestLogTimestamp ? getLocalDateString(oldestLogTimestamp) : null;
+
+      // Settings Save Handler
+      const handleSaveSettings = (e) => {
+        e.preventDefault();
+        setSettings({ ...editSettings });
+        setIsSettingsOpen(false);
+        showToast(t('settingsSaved'));
+      };
+
+      // Format currency (always Euro €)
+      const formatCurrency = (val) => {
+        const formatted = Number(val).toFixed(2);
+        return settings.language === 'de' 
+          ? `${formatted.replace('.', ',')} €` 
+          : `€${formatted}`;
+      };
+
+      // Check current day's heatmap details with simplified friendly phrases
+      const getHeatmapDayStatusStr = (dateObj) => {
+        if (!dateObj) return '';
+        const todayForStatus = new Date();
+        const todayStr = getLocalDateString(todayForStatus);
+        const dateStr = getLocalDateString(dateObj);
+        const isToday = dateStr === todayStr;
+        const isFuture = dateStr > todayStr;
+        
+        // Format date: "dd.MM." in German, "MM/dd" in English
+        const formattedDate = settings.language === 'de'
+          ? `${String(dateObj.getDate()).padStart(2, '0')}.${String(dateObj.getMonth() + 1).padStart(2, '0')}.`
+          : `${String(dateObj.getMonth() + 1).padStart(2, '0')}/${String(dateObj.getDate()).padStart(2, '0')}`;
+
+        // Check if month is simulated
+        const y = dateObj.getFullYear();
+        const mIdx = dateObj.getMonth();
+        const mLogs = logs.filter(log => {
+          const d = new Date(log.timestamp);
+          return d.getMonth() === mIdx && d.getFullYear() === y;
+        });
+        const isPastM = (y < todayForStatus.getFullYear()) || (y === todayForStatus.getFullYear() && mIdx < todayForStatus.getMonth());
+        const isSimulatedM = isPastM && mLogs.length === 0;
+
+        if (isSimulatedM) {
+          const countFormatted = settings.dailyAverage.toFixed(1).replace('.0', '');
+          const cigLabel = settings.dailyAverage === 1 ? (settings.language === 'de' ? 'Zigarette' : 'cigarette') : (settings.language === 'de' ? 'Zigaretten' : 'cigarettes');
+          return settings.language === 'de'
+            ? `${countFormatted.replace('.', ',')} ${cigLabel} am ${formattedDate} (Kalkulationsbasis)`
+            : `${countFormatted} ${cigLabel} on ${formattedDate} (estimated baseline)`;
+        }
+
+        // Check if in the future
+        if (isFuture) {
+          return settings.language === 'de'
+            ? `Zukünftiges Datum (${formattedDate})`
+            : `Future date (${formattedDate})`;
+        }
+
+        // Check if before tracking
+        if (startOfTrackingDateStr && dateStr < startOfTrackingDateStr) {
+          return settings.language === 'de'
+            ? `Keine Daten am ${formattedDate} erfasst`
+            : `No data recorded on ${formattedDate}`;
+        }
+
+        const dayTotal = logs.reduce((sum, log) => {
+          if (getLocalDateString(log.timestamp) === dateStr) {
+            return sum + log.amount;
+          }
+          return sum;
+        }, 0);
+
+        const amountStr = dayTotal.toFixed(1).replace('.0', '');
+
+        if (settings.language === 'de') {
+          if (dayTotal === 0) {
+            return isToday 
+              ? 'Heute keine Zigaretten geraucht ⭐️' 
+              : `Keine Zigaretten am ${formattedDate} geraucht ⭐️`;
+          } else if (dayTotal === 1) {
+            return isToday 
+              ? 'Heute 1 Zigarette geraucht' 
+              : `1 Zigarette am ${formattedDate} geraucht`;
+          } else {
+            return isToday 
+              ? `Heute ${amountStr.replace('.', ',')} Zigaretten geraucht` 
+              : `${amountStr.replace('.', ',')} Zigaretten am ${formattedDate} geraucht`;
+          }
+        } else {
+          if (dayTotal === 0) {
+            return isToday 
+              ? 'Today 0 cigarettes smoked ⭐️' 
+              : `0 cigarettes smoked on ${formattedDate} ⭐️`;
+          } else if (dayTotal === 1) {
+            return isToday 
+              ? 'Today 1 cigarette smoked' 
+              : `1 cigarette smoked on ${formattedDate}`;
+          } else {
+            return isToday 
+              ? `Today ${amountStr} cigarettes smoked` 
+              : `${amountStr} cigarettes smoked on ${formattedDate}`;
+          }
+        }
+      };
+
+      // Get averages for each month of the current year (chronological 1 to 12)
+      const getYearlyOverviewData = () => {
+        const currentYear = new Date().getFullYear();
+        const data = [];
+        const today = new Date();
+        
+        const oldestLogTimestampVal = logs.length > 0 ? Math.min(...logs.map(l => l.timestamp)) : null;
+        const oldestLogDateVal = oldestLogTimestampVal ? new Date(oldestLogTimestampVal) : null;
+        
+        for (let m = 0; m < 12; m++) {
+          const monthLogs = logs.filter(log => {
+            const d = new Date(log.timestamp);
+            return d.getMonth() === m && d.getFullYear() === currentYear;
+          });
+          
+          const isPast = (currentYear < today.getFullYear()) || (currentYear === today.getFullYear() && m < today.getMonth());
+          const hasActualLogs = monthLogs.length > 0;
+          const daysInMonth = new Date(currentYear, m + 1, 0).getDate();
+          
+          let average = 0;
+          let total = 0;
+          let hasData = false;
+          let isSimulated = false;
+          
+          if (isPast && !hasActualLogs) {
+            average = settings.dailyAverage;
+            total = settings.dailyAverage * daysInMonth;
+            hasData = true;
+            isSimulated = true;
+          } else {
+            let daysTracked = daysInMonth;
+            
+            // Check if month is in the future
+            const isFuture = (currentYear > today.getFullYear()) || (currentYear === today.getFullYear() && m > today.getMonth());
+            
+            if (isFuture) {
+              daysTracked = 0;
+            } else if (today.getFullYear() === currentYear && today.getMonth() === m) {
+              let startDay = 1;
+              if (oldestLogDateVal && oldestLogDateVal.getFullYear() === currentYear && oldestLogDateVal.getMonth() === m) {
+                startDay = oldestLogDateVal.getDate();
+              }
+              daysTracked = Math.max(1, today.getDate() - startDay + 1);
+            } else if (oldestLogDateVal && oldestLogDateVal.getFullYear() === currentYear && oldestLogDateVal.getMonth() === m) {
+              daysTracked = Math.max(1, daysTracked - oldestLogDateVal.getDate() + 1);
+            } else if (oldestLogDateVal && oldestLogDateVal.getTime() > new Date(currentYear, m + 1, 0).getTime()) {
+              daysTracked = 0; // before tracking started
+            }
+            
+            total = monthLogs.reduce((sum, log) => sum + log.amount, 0);
+            average = daysTracked > 0 ? total / daysTracked : 0;
+            hasData = daysTracked > 0;
+            isSimulated = false;
+          }
+          
+          const monthName = new Date(currentYear, m, 1).toLocaleDateString(settings.language === 'de' ? 'de-DE' : 'en-US', { month: 'short' });
+          
+          data.push({
+            monthIndex: m,
+            monthName,
+            average,
+            total,
+            hasData,
+            isSimulated
+          });
+        }
+        return data; // Chronological order
+      };
+
+      const getHeatmapOptions = (lang) => {
+        return [
+          { value: 'rolling30', label: lang === 'de' ? '30 Tage' : '30 Days' },
+          { value: 'yearly', label: lang === 'de' ? 'Jahresübersicht' : 'Yearly' }
+        ];
+      };
+
+      return (
+        <>
+          {/* Header */}
+          <header className="px-6 pt-6 pb-4 flex justify-between items-center border-b border-zinc-900 bg-zinc-950/90 backdrop-blur-md sticky top-0 z-30">
+            <h1 className="text-2xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+              <span className="w-2.5 h-6 bg-gradient-to-b from-orange-500 to-amber-500 rounded-full inline-block"></span>
+              {t('title')}
+            </h1>
+            <button 
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white active:scale-95 transition-all"
+              aria-label="Settings"
+            >
+              <Icon name="settings" className="w-5 h-5" />
+            </button>
+          </header>
+
+          {/* Main Area */}
+          <main className="flex-1 overflow-y-auto px-5 py-4 space-y-5 pb-24">
+            
+            {/* Upper Tracker Dashboard */}
+            <section className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 flex flex-col items-center relative overflow-hidden backdrop-blur-lg">
+              
+              {/* Tracker Widget */}
+              <CigaretteTracker 
+                settings={settings}
+                todayCount={todayCount}
+                onSmoke={handleAddSmoke}
+                t={t}
+              />
+
+              {/* Counters Grid */}
+              <div className="grid grid-cols-2 gap-4 w-full mt-2 pt-4 border-t border-zinc-800/80">
+                
+                {/* Today's Counter */}
+                <div className="flex flex-col items-center py-2 px-3 bg-zinc-900/60 border border-zinc-800/50 rounded-xl">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{t('todaysCounter')}</span>
+                  <div className="text-2xl font-black text-white font-display mt-0.5">
+                    {todayCount.toFixed(1).replace('.0', '')}
+                    <span className="text-xs font-semibold text-zinc-400 ml-1">
+                      {todayCount === 1 ? t('piece') : t('pieces')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Streak Counter */}
+                <div className="flex flex-col items-center py-2 px-3 bg-zinc-900/60 border border-zinc-800/50 rounded-xl relative overflow-hidden">
+                  {/* Info Icon */}
+                  <button 
+                    type="button"
+                    onClick={() => setShowStreakInfo(true)}
+                    className="absolute top-1.5 right-1.5 text-zinc-600 hover:text-zinc-400 active:scale-95 transition-all"
+                    title={settings.language === 'de' ? 'Mehr Infos' : 'More info'}
+                  >
+                    <Icon name="info" className="w-3.5 h-3.5" />
+                  </button>
+                  
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{t('streakCounter')}</span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {streak > 0 ? (
+                      <span className="relative flex h-5 w-5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                        <Icon name="fire" className="w-5 h-5 text-orange-500 fill-orange-500 relative" />
+                      </span>
+                    ) : (
+                      <Icon name="fire" className="w-5 h-5 text-zinc-600" />
+                    )}
+                    <span className="text-2xl font-black font-display text-white">
+                      {streak}
+                    </span>
+                  </div>
+                  <span className="text-[9px] text-zinc-500 mt-0.5">
+                    {streak > 0 ? `${t('streakActive')}` : `${t('streakBroken')}`}
+                  </span>
+                </div>
+
+              </div>
+
+              {/* Reset Today Action */}
+              {todayCount > 0 && (
+                <button 
+                  onClick={handleResetToday}
+                  className="mt-4 flex items-center gap-1.5 text-[10px] font-semibold text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-wider"
+                >
+                  <Icon name="refresh" className="w-3 h-3" />
+                  {t('resetToday')}
+                </button>
+              )}
+
+            </section>
+
+            {/* Middle Heatmap Section */}
+            <section className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 space-y-4 backdrop-blur-lg">
+              
+              {/* Horizontal Scrollable View Selectors */}
+              <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 scrollbar-none snap-x snap-mandatory">
+                {getHeatmapOptions(settings.language).map((opt) => {
+                  const isActive = heatmapView === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setHeatmapView(opt.value);
+                        setSelectedHeatmapDay(null);
+                      }}
+                      className={`snap-start shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                        isActive
+                          ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20 scale-[1.02]'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {heatmapView !== 'yearly' ? (
+                /* Calendar Grid View */
+                <div className="space-y-3">
+                  {heatmapView !== 'rolling30' && (
+                    <div className="flex items-center gap-2 text-xs font-bold text-zinc-300 pb-2 border-b border-zinc-900/60">
+                      <button 
+                        type="button" 
+                        onClick={() => setHeatmapView('yearly')}
+                        className="flex items-center gap-1 text-zinc-550 hover:text-zinc-350 transition-colors"
+                      >
+                        <Icon name="x" className="w-3.5 h-3.5" />
+                        {settings.language === 'de' ? 'Zurück' : 'Back'}
+                      </button>
+                      <span className="text-zinc-800">|</span>
+                      <span className="text-orange-400">
+                        {(() => {
+                          const [year, monthStr] = heatmapView.split('-').map(Number);
+                          const d = new Date(year, monthStr - 1, 1);
+                          return d.toLocaleDateString(settings.language === 'de' ? 'de-DE' : 'en-US', { month: 'long', year: 'numeric' });
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Day Labels */}
+                  <div className="grid grid-cols-7 gap-1.5 text-center text-[9px] text-zinc-600 font-bold uppercase mb-2">
+                    {settings.language === 'de' ? (
+                      <><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></>
+                    ) : (
+                      <><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span></>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-2">
+                    {heatmapDays.map((date, idx) => {
+                      if (date === null) {
+                        return <div key={`empty-${idx}`} className="aspect-square" />;
+                      }
+
+                      const dateStr = getLocalDateString(date);
+                      const todayDate = new Date();
+                      
+                      // Check if month is simulated
+                      let isSimulatedMonth = false;
+                      let dayTotal = 0;
+                      let isBeforeTracking = false;
+
+                      if (heatmapView !== 'rolling30') {
+                        const [y, mStr] = heatmapView.split('-').map(Number);
+                        const mIdx = mStr - 1;
+                        const mLogs = logs.filter(log => {
+                          const d = new Date(log.timestamp);
+                          return d.getMonth() === mIdx && d.getFullYear() === y;
+                        });
+                        const isPastM = (y < todayDate.getFullYear()) || (y === todayDate.getFullYear() && mIdx < todayDate.getMonth());
+                        isSimulatedMonth = isPastM && mLogs.length === 0;
+                      }
+
+                      if (isSimulatedMonth) {
+                        dayTotal = settings.dailyAverage;
+                        isBeforeTracking = false;
+                      } else {
+                        // Sum logs for this date
+                        dayTotal = logs.reduce((sum, log) => {
+                          if (getLocalDateString(log.timestamp) === dateStr) {
+                            return sum + log.amount;
+                          }
+                          return sum;
+                        }, 0);
+
+                        if (startOfTrackingDateStr && dateStr < startOfTrackingDateStr) {
+                          isBeforeTracking = true;
+                        }
+                      }
+                      
+                      const todayStrVal = getLocalDateString(new Date());
+                      const isFuture = dateStr > todayStrVal;
+
+                      // Theme color coding
+                      let boxClass = "bg-zinc-800/40 border-zinc-800 text-zinc-500";
+                      let isPerfect = false;
+
+                      if (!isBeforeTracking && !isFuture) {
+                        if (dayTotal === 0) {
+                          isPerfect = true;
+                          boxClass = "bg-amber-500/10 border-amber-500/30 text-amber-400 ring-1 ring-amber-500/20";
+                        } else if (dayTotal < 0.5 * settings.dailyAverage) {
+                          boxClass = "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
+                        } else if (dayTotal <= settings.dailyAverage) {
+                          boxClass = "bg-orange-500/10 border-orange-500/30 text-orange-400";
+                        } else {
+                          boxClass = "bg-rose-500/10 border-rose-500/30 text-rose-400 font-bold";
+                        }
+                      } else {
+                        boxClass = "bg-zinc-900/20 border-zinc-900/60 text-zinc-750 opacity-25";
+                      }
+
+                      const isSelected = selectedHeatmapDay && getLocalDateString(selectedHeatmapDay) === dateStr;
+
+                      return (
+                        <button 
+                          key={idx}
+                          type="button"
+                          onClick={() => setSelectedHeatmapDay(date)}
+                          className={`aspect-square rounded-lg flex items-center justify-center text-[10px] font-medium border transition-all active:scale-90 ${boxClass} ${
+                            isSelected ? 'ring-2 ring-white border-transparent' : ''
+                          }`}
+                          title={getHeatmapDayStatusStr(date)}
+                        >
+                          {isPerfect ? (
+                            <Icon name="star" className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                          ) : (
+                            date.getDate()
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* Yearly Overview dashboard with 4x3 (3 cols, 4 rows) Clickable Grid */
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  {getYearlyOverviewData().map((monthItem) => {
+                    const avg = monthItem.average;
+                    const avgStr = avg.toFixed(1).replace('.0', '');
+                    let labelStr = '';
+                    if (settings.language === 'de') {
+                      labelStr = avg === 1 
+                        ? `1 Zigarette / Tag` 
+                        : `${avgStr.replace('.', ',')} Zigaretten / Tag`;
+                    } else {
+                      labelStr = avg === 1 
+                        ? `1 cigarette / day` 
+                        : `${avgStr} cigarettes / day`;
+                    }
+                    
+                    const barPercent = Math.min(100, (avg / settings.dailyAverage) * 100);
+                    
+                    let boxClass = "bg-zinc-900 border-zinc-800 text-zinc-550 opacity-40";
+                    
+                    if (monthItem.hasData) {
+                      if (avg === 0) {
+                        boxClass = "bg-amber-500/10 border-amber-500/30 text-amber-400 ring-1 ring-amber-500/20";
+                      } else if (avg < 0.5 * settings.dailyAverage) {
+                        boxClass = "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
+                      } else if (avg <= settings.dailyAverage) {
+                        boxClass = "bg-orange-500/10 border-orange-500/30 text-orange-400";
+                      } else {
+                        boxClass = "bg-rose-500/10 border-rose-500/30 text-rose-400 font-bold";
+                      }
+                    }
+                    
+                    return (
+                      <button 
+                        key={monthItem.monthIndex} 
+                        type="button"
+                        onClick={() => {
+                          const currentYear = new Date().getFullYear();
+                          setHeatmapView(`${currentYear}-${String(monthItem.monthIndex + 1).padStart(2, '0')}`);
+                          setSelectedHeatmapDay(null);
+                        }}
+                        className={`border rounded-xl p-2 flex flex-col items-center justify-between aspect-[1.1] transition-all hover:bg-zinc-850 hover:border-zinc-700 active:scale-95 shadow-sm ${boxClass}`}
+                      >
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-85">{monthItem.monthName}</span>
+                        <div className="text-lg font-black font-display my-0.5">
+                          {monthItem.hasData ? (
+                            monthItem.total === 0 ? "⭐️" : (settings.language === 'de' ? avgStr.replace('.', ',') : avgStr)
+                          ) : (
+                            "—"
+                          )}
+                        </div>
+                        <span className="text-[8px] font-semibold opacity-60">
+                          {monthItem.hasData ? (
+                            monthItem.total === 0 
+                              ? (settings.language === 'de' ? 'Perfekt' : 'Perfect') 
+                              : (settings.language === 'de' ? '/ Tag' : '/ day')
+                          ) : (
+                            settings.language === 'de' ? 'K.A.' : 'N/A'
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Heatmap Interactive Details Tooltip */}
+              <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-xl p-3 text-xs text-zinc-400 flex items-center gap-2">
+                <Icon name="info" className="w-4 h-4 text-zinc-500 shrink-0" />
+                <span className="leading-tight">
+                  {heatmapView === 'yearly'
+                    ? (settings.language === 'de' ? 'Klicke auf einen Monat für weitere Infos' : 'Click on a month to see further info')
+                    : (() => {
+                        if (heatmapView !== 'rolling30') {
+                          // Specific month view
+                          const [year, monthStr] = heatmapView.split('-').map(Number);
+                          const monthIdx = monthStr - 1;
+                          
+                          // Check if month has data
+                          const monthData = getYearlyOverviewData().find(m => m.monthIndex === monthIdx);
+                          const monthHasData = monthData ? monthData.hasData : false;
+                          const monthIsSimulated = monthData ? monthData.isSimulated : false;
+                          
+                          if (!monthHasData) {
+                            return settings.language === 'de' 
+                              ? 'Keine Daten für diesen Monat verfügbar' 
+                              : 'No data available for this month';
+                          }
+                          
+                          if (!selectedHeatmapDay) {
+                            if (monthIsSimulated) {
+                              return settings.language === 'de'
+                                ? 'Kalkulation für diesen Monat basiert auf deinem Durchschnitt'
+                                : 'Calculation for this month is based on your set average';
+                            }
+                            return settings.language === 'de'
+                              ? 'Klicke auf die Tage, um weitere Infos zu sehen'
+                              : 'Click on a day to see further info';
+                          }
+                        }
+                        
+                        return selectedHeatmapDay 
+                          ? getHeatmapDayStatusStr(selectedHeatmapDay) 
+                          : getHeatmapDayStatusStr(todayDateObj);
+                      })()
+                  }
+                </span>
+              </div>
+
+              {/* Heatmap Legend */}
+              <div className="flex justify-between items-center text-[9px] text-zinc-500 font-medium px-1 pt-1">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded bg-amber-500/20 border border-amber-500/40 inline-block"></span> 0
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded bg-emerald-500/20 border border-emerald-500/40 inline-block"></span> 
+                  &lt; {Math.round(settings.dailyAverage * 0.5)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded bg-orange-500/20 border border-orange-500/40 inline-block"></span> 
+                  {Math.round(settings.dailyAverage * 0.5)} - {Math.round(settings.dailyAverage)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded bg-rose-500/20 border border-rose-500/40 inline-block"></span> 
+                  &gt; {Math.round(settings.dailyAverage)}
+                </span>
+              </div>
+            </section>
+
+            {/* Lower Section (KPIs & Metrics) */}
+            <section className="grid grid-cols-2 gap-4">
+              
+              {/* Money Spent/Saved Card */}
+              <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4 flex flex-col justify-between backdrop-blur-lg">
+                <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">{getFinanceHeader()}</h4>
+                
+                <div className="space-y-2 mt-3">
+                  <div>
+                    <span className="text-[10px] text-zinc-500 block leading-none">{t('spent')}</span>
+                    <span className="text-base font-bold text-zinc-200 mt-0.5 block">
+                      {currentFinance.hasData ? formatCurrency(currentFinance.spent) : "—"}
+                    </span>
+                  </div>
+                  
+                  <div className="border-t border-zinc-800/60 pt-1.5">
+                    <span className="text-[10px] text-zinc-500 block leading-none">
+                      {currentFinance.hasData && currentFinance.saved < 0 ? t('overspent') : t('saved')}
+                    </span>
+                    <span className={`text-base font-extrabold mt-0.5 block ${
+                      !currentFinance.hasData 
+                        ? 'text-zinc-500' 
+                        : currentFinance.saved >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}>
+                      {currentFinance.hasData ? formatCurrency(Math.abs(currentFinance.saved)) : "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Smoke Trend Card */}
+              <div className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-4 flex flex-col justify-between backdrop-blur-lg">
+                <div>
+                  <h4 className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">{getTrendHeader()}</h4>
+                </div>
+                
+                <div className="mt-3 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {!currentTrend.hasData ? (
+                      <div className="inline-flex items-center gap-0.5 text-zinc-650 font-extrabold text-lg font-display">
+                        —
+                      </div>
+                    ) : currentTrend.percent < 0 ? (
+                      <div className="inline-flex items-center gap-0.5 text-emerald-400 font-extrabold text-lg font-display">
+                        <Icon name="trendDown" className="w-4 h-4 text-emerald-400 shrink-0" />
+                        {Math.abs(currentTrend.percent).toFixed(0)}%
+                      </div>
+                    ) : currentTrend.percent > 0 ? (
+                      <div className="inline-flex items-center gap-0.5 text-rose-400 font-extrabold text-lg font-display">
+                        <Icon name="trendUp" className="w-4 h-4 text-rose-400 shrink-0" />
+                        +{currentTrend.percent.toFixed(0)}%
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-0.5 text-zinc-400 font-extrabold text-lg font-display">
+                        <Icon name="trendFlat" className="w-4 h-4 text-zinc-400 shrink-0" />
+                        0%
+                      </div>
+                    )}
+                    
+                    {currentTrend.hasData && (
+                      <span className="text-[10px] text-zinc-400 font-medium">
+                        {currentTrend.percent < 0 
+                          ? (settings.language === 'de' ? 'weniger' : 'less')
+                          : currentTrend.percent > 0 
+                            ? (settings.language === 'de' ? 'mehr' : 'more')
+                            : ''}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <span className="text-[10px] text-zinc-500 leading-tight">
+                    {currentTrend.labelText}
+                  </span>
+                </div>
+              </div>
+
+            </section>
+
+            {/* Recent History Log Section */}
+            <section className="bg-zinc-900/40 border border-zinc-900 rounded-2xl p-5 space-y-3 backdrop-blur-lg">
+              <h3 className="font-semibold text-zinc-200 text-sm">{t('recentHistory')}</h3>
+              
+              <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                {todayLogs.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-zinc-500 italic">
+                    {t('noEntries')}
+                  </div>
+                ) : (
+                  todayLogs.map((log) => {
+                    const timeStr = new Date(log.timestamp).toLocaleTimeString([], { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    });
+                    
+                    return (
+                      <div key={log.id} className="flex justify-between items-center bg-zinc-900/80 border border-zinc-800/80 rounded-xl p-3 hover:bg-zinc-900 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-300 font-bold text-xs">
+                            +{log.amount}
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-zinc-200">
+                              {t('cigarette')}
+                            </div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5">
+                              {t('trackedAt')} {timeStr}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <button 
+                          onClick={() => handleDeleteLog(log.id)}
+                          className="p-2 rounded-lg hover:bg-rose-500/10 text-zinc-500 hover:text-rose-400 active:scale-95 transition-all"
+                          title={t('delete')}
+                        >
+                          <Icon name="trash" className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+            
+            {/* Quick Tips Guide */}
+            <section className="bg-zinc-900/20 border border-zinc-900/60 rounded-2xl p-4 text-[11px] text-zinc-500 space-y-2">
+              <h4 className="font-semibold text-zinc-400 uppercase tracking-wider text-[10px]">{t('quickTips')}</h4>
+              {settings.allowHalfSmokes ? (
+                <ul className="list-disc list-inside space-y-1 pl-1">
+                  <li>{t('tapToSmokeFront')}</li>
+                  <li>{t('tapToSmokeBack')}</li>
+                  <li className="text-zinc-400 font-medium list-none mt-1.5 border-t border-zinc-900/80 pt-1.5">{t('setupProfile')}</li>
+                </ul>
+              ) : (
+                <ul className="list-disc list-inside space-y-1 pl-1">
+                  <li>{t('tapToSmokeWhole')}</li>
+                  <li className="text-zinc-400 font-medium list-none mt-1.5 border-t border-zinc-900/80 pt-1.5">{t('setupProfile')}</li>
+                </ul>
+              )}
+            </section>
+
+          </main>
+
+          {/* Action Notification Toast */}
+          {actionToast && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2.5 bg-zinc-900/95 border border-zinc-800 text-zinc-200 rounded-xl shadow-2xl z-50 text-xs font-semibold tracking-wide flex items-center gap-2 backdrop-blur-md animate-bounce">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+              {actionToast}
+            </div>
+          )}
+
+          {/* Footer Branding */}
+          <footer className="w-full text-center py-4 text-[10px] text-zinc-600 border-t border-zinc-900 bg-zinc-950/80 sticky bottom-0 z-20 backdrop-blur-md">
+            &copy; {new Date().getFullYear()} Smoke Tracker | Offline LocalStorage Mode
+          </footer>
+
+          {/* Settings View Modal */}
+          {isSettingsOpen && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col justify-end">
+              
+              {/* Modal Card container */}
+              <form 
+                onSubmit={handleSaveSettings}
+                className="bg-zinc-950 border-t border-zinc-900 rounded-t-3xl max-h-[85vh] overflow-y-auto p-6 space-y-6 flex flex-col justify-between shadow-2xl"
+              >
+                {/* Modal Title */}
+                <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+                  <h2 className="text-xl font-bold font-display text-white flex items-center gap-2">
+                    <Icon name="settings" className="w-5 h-5 text-orange-400" />
+                    {t('settings')}
+                  </h2>
+                  <button 
+                    type="button"
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="p-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                  >
+                    <Icon name="x" className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Modal Settings Inputs */}
+                <div className="space-y-5">
+                  
+                  {/* Language Selector */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('language')}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditSettings(prev => ({ ...prev, language: 'en' }))}
+                        className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                          editSettings.language === 'en'
+                            ? 'bg-zinc-100 border-white text-zinc-950 shadow-lg scale-[1.02]'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        English
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditSettings(prev => ({ ...prev, language: 'de' }))}
+                        className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                          editSettings.language === 'de'
+                            ? 'bg-zinc-100 border-white text-zinc-950 shadow-lg scale-[1.02]'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        Deutsch
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Smoke Type Selector removed */}
+
+                  {/* Cost Settings */}
+                  <div className="space-y-3 bg-zinc-900/30 border border-zinc-900/80 rounded-2xl p-4">
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('cost')}</h4>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Price Per Pack */}
+                      <div className="space-y-1.5">
+                        <label htmlFor="pricePerPack" className="text-[10px] text-zinc-500 font-semibold">{t('pricePerPack')}</label>
+                        <input
+                          id="pricePerPack"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          required
+                          value={editSettings.pricePerPack}
+                          onChange={(e) => setEditSettings(prev => ({ ...prev, pricePerPack: parseFloat(e.target.value) || 0 }))}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors"
+                        />
+                      </div>
+                      
+                      {/* Pieces Per Pack */}
+                      <div className="space-y-1.5">
+                        <label htmlFor="piecesPerPack" className="text-[10px] text-zinc-500 font-semibold">{t('piecesPerPack')}</label>
+                        <input
+                          id="piecesPerPack"
+                          type="number"
+                          step="1"
+                          min="1"
+                          required
+                          value={editSettings.piecesPerPack}
+                          onChange={(e) => setEditSettings(prev => ({ ...prev, piecesPerPack: parseInt(e.target.value) || 1 }))}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Daily Average Benchmark */}
+                  <div className="space-y-1.5">
+                    <label htmlFor="dailyAverage" className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex justify-between">
+                      <span>{t('dailyAverage')}</span>
+                      <span className="text-zinc-500 normal-case font-normal text-[11px]">{editSettings.dailyAverage} {t('pieces')}</span>
+                    </label>
+                    <input
+                      id="dailyAverage"
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      required
+                      value={editSettings.dailyAverage}
+                      onChange={(e) => setEditSettings(prev => ({ ...prev, dailyAverage: parseFloat(e.target.value) || 1 }))}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-zinc-500 transition-colors"
+                    />
+                  </div>
+
+                  {/* Allow Half Smokes Toggle Switch */}
+                  <div className="flex items-center justify-between bg-zinc-900/30 border border-zinc-900/80 rounded-2xl p-4">
+                    <div className="pr-4 space-y-1">
+                      <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider block">{t('allowHalfSmokes')}</span>
+                      <span className="text-[10px] text-zinc-500 block leading-tight">{t('halfSmokeHelp')}</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input 
+                        type="checkbox" 
+                        checked={editSettings.allowHalfSmokes} 
+                        onChange={(e) => setEditSettings(prev => ({ ...prev, allowHalfSmokes: e.target.checked }))}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-white"></div>
+                    </label>
+                  </div>
+
+                  {/* Data Backup Section */}
+                  <div className="space-y-3 bg-zinc-900/30 border border-zinc-900/80 rounded-2xl p-4">
+                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{t('backupRestore')}</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={handleExportData}
+                        className="flex items-center justify-center gap-2 py-2.5 px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-850 active:scale-95 transition-all"
+                      >
+                        <Icon name="download" className="w-4.5 h-4.5 text-emerald-400" />
+                        {t('exportData')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current.click()}
+                        className="flex items-center justify-center gap-2 py-2.5 px-3 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white hover:bg-zinc-850 active:scale-95 transition-all"
+                      >
+                        <Icon name="upload" className="w-4.5 h-4.5 text-orange-400" />
+                        {t('importData')}
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Hidden File Input for Import */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".json"
+                  onChange={handleImportData}
+                  className="hidden"
+                />
+
+                {/* Save Settings Action Button */}
+                <button
+                  type="submit"
+                  className="w-full bg-white hover:bg-zinc-200 text-zinc-950 font-bold py-3.5 px-4 rounded-xl mt-6 transition-all active:scale-[0.98] shadow-lg text-sm"
+                >
+                  {t('save')}
+                </button>
+              </form>
+
+            </div>
+          )}
+
+          {/* Streak Explanation Modal */}
+          {showStreakInfo && (
+            <div 
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-6"
+              onClick={() => setShowStreakInfo(false)}
+            >
+              <div 
+                className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 w-full max-w-xs space-y-4 shadow-2xl relative animate-scaleUp"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button 
+                  onClick={() => setShowStreakInfo(false)}
+                  className="absolute top-3.5 right-3.5 text-zinc-500 hover:text-zinc-300 active:scale-95 transition-all"
+                >
+                  <Icon name="x" className="w-4 h-4" />
+                </button>
+                
+                <div className="flex items-center gap-2 text-orange-500">
+                  <Icon name="fire" className="w-5 h-5 fill-orange-500" />
+                  <h3 className="font-bold text-sm text-zinc-100">{settings.language === 'de' ? 'Erfolgsserie' : 'Streak'}</h3>
+                </div>
+                
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {settings.language === 'de' 
+                    ? 'Deine Erfolgsserie zeigt an, wie viele Tage in Folge (ab heute rückwärts gezählt) du unter deinem eingestellten Tageslimit geblieben bist. Rauchfreie Tage zählen als Erfolg. Sobald du das Limit an einem Tag erreichst oder überschreitest, reißt die Serie ab.' 
+                    : 'Your streak shows how many consecutive days (counting backwards from today) you stayed under your daily limit. Days without any logs count as smoke-free and are considered a success. If you reach or exceed your limit on any day, the streak resets to 0.'}
+                </p>
+                
+                <button
+                  onClick={() => setShowStreakInfo(false)}
+                  className="w-full py-2.5 bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-xl text-xs font-semibold active:scale-95 transition-all hover:bg-zinc-850"
+                >
+                  {settings.language === 'de' ? 'Verstanden' : 'Got it'}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      );
+    };
+
+    // Render React App
+    const rootElement = document.getElementById('root');
+    ReactDOM.createRoot(rootElement).render(<App />);
+  </script>
+</body>
+</html>
